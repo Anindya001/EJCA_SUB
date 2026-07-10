@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this reproducibility package, cite the associated manuscript."
+title: "Sampling-period design windows for digital PI/PID control under dead-time uncertainty"
+authors:
+  - family-names: "Bhattacharyya"
+    given-names: "A."
+date-released: "2026-07-10"
+repository-code: "https://github.com/"
+type: software
+license: "NOASSERTION"

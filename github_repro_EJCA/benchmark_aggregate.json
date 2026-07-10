@@ -1,0 +1,30 @@
+{
+  "immediate; backward Euler": {
+    "mean_error": 2.268177003104157,
+    "median_abs_error": 1.625167047161188,
+    "max_abs_error": 6.004798954925235,
+    "min_error": -0.4773030380740124,
+    "max_error": 6.004798954925235
+  },
+  "immediate; Tustin": {
+    "mean_error": 0.3749553243749215,
+    "median_abs_error": 0.700235982020768,
+    "max_abs_error": 1.3927614513942714,
+    "min_error": -0.7993151028750347,
+    "max_error": 1.3927614513942714
+  },
+  "next scan; backward Euler": {
+    "mean_error": 0.8041182083333643,
+    "median_abs_error": 0.5806040086106385,
+    "max_abs_error": 2.430612412719384,
+    "min_error": -0.2916460778120822,
+    "max_error": 2.430612412719384
+  },
+  "next scan; Tustin": {
+    "mean_error": 0.05841780444519292,
+    "median_abs_error": 0.04800253494460094,
+    "max_abs_error": 0.1220694018585462,
+    "min_error": 0.005236987224918721,
+    "max_error": 0.1220694018585462
+  }
+}
