@@ -15,3 +15,8 @@ __pycache__/
 .venv/
 .pytest_cache/
 paper/*.abs
+
+# Convenience bundle of paper/ + github_repro_EJCA/, rebuilt on demand.
+# The Overleaf submission package (EJCA_overleaf_R2.zip) IS tracked, since it
+# carries the CAS class files and is the artifact actually submitted.
+EJCA_full_R2.zip
