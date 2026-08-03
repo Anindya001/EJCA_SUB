@@ -1,0 +1,46 @@
+{
+  "process": {
+    "T_min": 1.0986328125,
+    "T_max": 7.0249999999999995,
+    "T_cost": 3.733630959152574,
+    "T_sel": 3.733630959152574,
+    "T_used": 2.0,
+    "exact_pm": 57.6310788867582,
+    "target_pm": 57.663694437304166,
+    "active_lower": "coefficient resolution",
+    "active_upper": "load disturbance",
+    "hardware_feasible": [
+      2.0,
+      5.0
+    ],
+    "bounds": {
+      "phase margin": 7.875089343969756,
+      "load disturbance": 7.0249999999999995,
+      "coefficient resolution": 1.0986328125
+    },
+    "diagnosis": "feasible: T in [1.099, 7.025] s, binding upper = load disturbance, binding lower = coefficient resolution, selection interior."
+  },
+  "power_electronics": {
+    "T_min": 3.3552910009244026e-05,
+    "T_max": 0.00010534905580228107,
+    "T_sel": 0.00010534905580228107,
+    "T_used": 0.0001,
+    "exact_pm": 79.49429778930768,
+    "target_pm": 79.32725675736702,
+    "active_lower": "derivative noise",
+    "active_upper": "phase margin",
+    "hardware_feasible": [
+      5e-05,
+      0.0001
+    ],
+    "f_switching_hz": 10000.0,
+    "omega_d_T": 0.4453617714151233,
+    "bounds": {
+      "phase margin": 0.00010534905580228107,
+      "mode resolution": 0.00017635060164725632,
+      "coefficient resolution": 4.1961669921875e-07,
+      "derivative noise": 3.3552910009244026e-05
+    },
+    "diagnosis": "feasible: T in [3.355e-05, 0.0001053] s, binding upper = phase margin, binding lower = derivative noise, selection clamped to T_max (phase margin)."
+  }
+}

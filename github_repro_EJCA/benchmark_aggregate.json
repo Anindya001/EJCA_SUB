@@ -1,30 +1,41 @@
 {
-  "immediate; backward Euler": {
-    "mean_error": 2.268177003104157,
-    "median_abs_error": 1.625167047161188,
-    "max_abs_error": 6.004798954925235,
-    "min_error": -0.4773030380740124,
-    "max_error": 6.004798954925235
+  "groups": {
+    "immediate; backward Euler": {
+      "n": 12,
+      "mean_error": 2.2681862453347903,
+      "median_abs_error": 1.6251750367848672,
+      "max_abs_error": 6.004809061128569,
+      "min_error": -0.4773027161000769,
+      "max_error": 6.004809061128569
+    },
+    "immediate; Tustin": {
+      "n": 12,
+      "mean_error": 0.37496427928332804,
+      "median_abs_error": 0.7002436716764677,
+      "max_abs_error": 1.3927642581923294,
+      "min_error": -0.7993039333135172,
+      "max_error": 1.3927642581923294
+    },
+    "next scan; backward Euler": {
+      "n": 12,
+      "mean_error": 0.8041265967468666,
+      "median_abs_error": 0.5806131824901861,
+      "max_abs_error": 2.4306213407693207,
+      "min_error": -0.29163125605452933,
+      "max_error": 2.4306213407693207
+    },
+    "next scan; Tustin": {
+      "n": 12,
+      "mean_error": 0.05842906174743826,
+      "median_abs_error": 0.048017801393111625,
+      "max_abs_error": 0.12207117102124698,
+      "min_error": 0.005245520075845889,
+      "max_error": 0.12207117102124698
+    }
   },
-  "immediate; Tustin": {
-    "mean_error": 0.3749553243749215,
-    "median_abs_error": 0.700235982020768,
-    "max_abs_error": 1.3927614513942714,
-    "min_error": -0.7993151028750347,
-    "max_error": 1.3927614513942714
-  },
-  "next scan; backward Euler": {
-    "mean_error": 0.8041182083333643,
-    "median_abs_error": 0.5806040086106385,
-    "max_abs_error": 2.430612412719384,
-    "min_error": -0.2916460778120822,
-    "max_error": 2.430612412719384
-  },
-  "next scan; Tustin": {
-    "mean_error": 0.05841780444519292,
-    "median_abs_error": 0.04800253494460094,
-    "max_abs_error": 0.1220694018585462,
-    "min_error": 0.005236987224918721,
-    "max_error": 0.1220694018585462
+  "overall": {
+    "n_cases": 48,
+    "worst_shortfall": -0.7993039333135172,
+    "max_crossings": 1
   }
 }
