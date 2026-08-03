@@ -1,8 +1,52 @@
 {
-  "n_cases": 6,
-  "median_abs_error": 0.14923537818529553,
-  "max_abs_error": 0.16560947582671304,
-  "min_error": 0.13158557359034262,
-  "max_error": 0.16560947582671304,
-  "max_omega_d_T": 0.42247694541391795
+  "summary": {
+    "n_cases": 162,
+    "n_distinct": 27,
+    "median_abs_error": 0.045866263643105754,
+    "max_abs_error": 0.8690151974653659,
+    "min_error": 0.005533625372152073,
+    "max_error": 0.8690151974653659,
+    "worst_shortfall": 0.0,
+    "max_omega_d_T": 0.7853981633974483,
+    "max_crossings": 1,
+    "n_mode_limited": 6
+  },
+  "groups": {
+    "immediate; -10%": {
+      "n": 27,
+      "median_abs_error": 0.12168625513896814,
+      "worst_shortfall": 0.0,
+      "max_excess": 0.2133139162857276
+    },
+    "immediate; +0%": {
+      "n": 27,
+      "median_abs_error": 0.1391764192318874,
+      "worst_shortfall": 0.0,
+      "max_excess": 0.4259446838468506
+    },
+    "immediate; +10%": {
+      "n": 27,
+      "median_abs_error": 0.15500920248976513,
+      "worst_shortfall": 0.0,
+      "max_excess": 0.8690151974653659
+    },
+    "next scan; -10%": {
+      "n": 27,
+      "median_abs_error": 0.013018304162059735,
+      "worst_shortfall": 0.0,
+      "max_excess": 0.023608615710784875
+    },
+    "next scan; +0%": {
+      "n": 27,
+      "median_abs_error": 0.015500367335462784,
+      "worst_shortfall": 0.0,
+      "max_excess": 0.04827118215951032
+    },
+    "next scan; +10%": {
+      "n": 27,
+      "median_abs_error": 0.017552643532098955,
+      "worst_shortfall": 0.0,
+      "max_excess": 0.09692905155225162
+    }
+  }
 }

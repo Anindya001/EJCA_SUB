@@ -1,0 +1,1081 @@
+%% Elsevier CAS single-column format
+\documentclass[a4paper,fleqn]{cas-sc}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage[expansion=false]{microtype}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage[section]{placeins}
+%% ------------------------------------------------------------------
+%% Float placement policy (single consolidated block; the CAS class
+%% defaults are overridden here and NOT redefined again in the body).
+%% ------------------------------------------------------------------
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.90}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.85}
+\renewcommand{\dbltopfraction}{0.95}
+\renewcommand{\dblfloatpagefraction}{0.85}
+\setcounter{topnumber}{4}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{6}
+\setcounter{dbltopnumber}{4}
+%% Tighter float/text separation
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\intextsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+%% ------------------------------------------------------------------
+\usepackage[separate-uncertainty=true]{siunitx}
+\let\procedure\relax
+\let\endprocedure\relax
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage[nameinlink,capitalise]{cleveref}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+\crefname{proposition}{Proposition}{Propositions}
+\crefname{lemma}{Lemma}{Lemmas}
+\crefname{remark}{Remark}{Remarks}
+\crefname{algocf}{Algorithm}{Algorithms}
+\newcommand{\thetaeff}{\theta_{\mathrm{eff}}}
+\newcommand{\Tmin}{T_{\min}}
+\newcommand{\Tmax}{T_{\max}}
+\newcommand{\wc}{\omega_c}
+\newcommand{\wn}{\omega_n}
+\newcommand{\wdamp}{\omega_d}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Tcost}{T_{\mathrm{cost}}}
+\newcommand{\Tsel}{T_{\mathrm{sel}}}
+\newcommand{\Tmaxcc}{T_{\max}^{\mathrm{cc}}}
+\newcommand{\thetad}{\widehat{\theta}}
+\input{validation_macros.tex}
+
+\begin{document}
+\let\WriteBookmarks\relax
+
+\shorttitle{Sampling-period design windows for digital PI/PID control}
+\shortauthors{A.~Bhattacharyya}
+
+\title[mode = title]{Two-sided sampling-period design windows for digital PI/PID control under dead-time and identification uncertainty}
+
+\author[1]{Anindya Bhattacharyya}%[orcid=0000-0000-0000-0000] % insert ORCID
+\cormark[1]
+%\ead{your.email@igcar.gov.in} % uncomment and insert corresponding-author email before submission
+\credit{Conceptualization, Methodology, Formal analysis, Software, Validation, Visualization, Writing -- original draft, Writing -- review and editing}
+\affiliation[1]{organization={Real Time Systems Division, Electronics and Instrumentation Group, Indira Gandhi Centre for Atomic Research},
+            city={Kalpakkam},
+            postcode={603102},
+            state={Tamil Nadu},
+            country={India}}
+\cortext[1]{Corresponding author}
+
+\begin{abstract}
+Bandwidth and rise-time heuristics for selecting the sampling period of a digital PI/PID controller prevent excessively slow sampling but provide no fast-sampling limit. This paper formulates sampling-period selection as a two-sided feasibility problem for first-order-plus-time-delay (FOPTD) and second-order-plus-time-delay (SOPTD) loops tuned by the simple internal model control (SIMC) rules. Phase-margin erosion, load-disturbance degradation and modal-resolution requirements determine the upper endpoint of a design window, while coefficient quantisation, derivative-noise amplification and optional sampling-zero cancellation determine the lower endpoint. Hold, computation, communication and filter delays are combined in a single effective-delay budget, and a strictly convex surrogate cost yields a unique candidate period, which is projected onto the window. For FOPTD loops, an exact arbitrary-dead-time pulse-transfer model quantifies the error of the conventional half-sample-delay approximation for backward-Euler and Tustin PI realisations. Uncertainty is treated at two levels: a closed-form chance bound applies when only the dead time is uncertain, whereas joint gain, time-constant and dead-time uncertainty is propagated through the exact discrete loop with a frozen controller. A feasibility condition states when the window is non-empty and identifies the two active constraints that must be renegotiated when it is not. Across \BenchN{} FOPTD cases, the analytical \ang{10} phase-loss period exhibited a worst-case shortfall of \ang{\BenchWorstShortfall}; over \SoptdN{} SOPTD cases with timing and modal mismatch, every case was conservative. Split-bootstrap calibration against joint uncertainty raised held-out phase-margin satisfaction from \BootCovJointBEAtScalar\% to \BootCovJointBECons\%. Two worked examples, a synchronous-scan process loop and a digitally controlled converter voltage loop, show the window excluding implementable sampling rates that a one-sided bandwidth rule would accept, for different reasons in each case. The resulting window constitutes a performance and implementation rule rather than a sampled-data stability certificate.
+\end{abstract}
+
+\begin{highlights}
+\item A two-sided sampling-period design window with explicit endpoints is derived.
+\item Phase-margin, IAE, quantisation, noise and sampling-zero limits bound the window.
+\item A feasibility test names the constraints to renegotiate when no period exists.
+\item Exact pulse-transfer models quantify backward-Euler and Tustin PI errors.
+\item Process-control and power-converter examples give directly implementable rates.
+\end{highlights}
+
+\begin{keywords}
+sampled-data control \sep sampling-period selection \sep digital PI/PID control \sep dead-time uncertainty \sep sampling zeros \sep coefficient quantisation
+\end{keywords}
+
+\maketitle
+
+\section{Introduction and related work}
+\label{sec:intro}
+The sampling period $T$ is easy to overlook, yet it strongly affects a digital control loop. In practice, the continuous-time PI/PID controller is often tuned first and the period is selected later. Common rules use ten to thirty samples over the closed-loop rise time, or set the sampling frequency roughly one order of magnitude above the crossover frequency \citep{astrom1997computer,franklin1998digital,isermann1989digital}. These rules address the main slow-sampling penalty: the zero-order hold adds phase lag and reduces robustness.
+
+These rules, however, are one-sided. They limit slow sampling but do not indicate when faster sampling ceases to be beneficial. Very small periods push discrete poles towards $z=1$, which can make fixed-point coefficients poorly conditioned. Derivative action amplifies measurement noise, and valves or drives may be updated more often than the process requires. For relative-degree-two plants, sampling zeros approach $z=-1$; cancelling such a zero can produce rapid command reversals. These effects require a lower as well as an upper limit on $T$.
+
+This paper therefore treats $T$ as a two-sided design variable for SIMC-tuned FOPTD and SOPTD loops. Robustness and performance requirements set the upper endpoint $\Tmax$; implementation limits set the lower endpoint $\Tmin$. A strictly convex surrogate cost gives an unconstrained candidate $\Tcost$, and the final choice $\Tsel$ is its projection onto $[\Tmin,\Tmax]$. The result is neither a universal optimum nor a sampled-data stability certificate: it is a structured engineering rule for periodic digital emulation, with optional retuning on the effective delay.
+
+Classical sampled-data texts establish bandwidth rules, zero-order-hold equivalents and intersample behaviour \citep{astrom1997computer,franklin1998digital,isermann1989digital,middleton1990digital,goodwin2001control,chen1995optimal,feuer1996sampling,laila2002dissipation,monaco2007advanced,hagiwara2008modified}. Later studies track digital PID parameters as $T$ changes or select $T$ numerically for LTI, cascade and pole-assignment controllers \citep{laskawski2015sampling,susca2023sampling,araujo2024samplingperiod}. Time-delay and hybrid methods provide maximum admissible sampling intervals, including under aperiodic sampling \citep{fridman2010refined,hetel2017recent,fagundes2024stability}, while finite-word-length studies address instability at very small periods \citep{fialho1994wordlength,gessing2001fwl}. The proposed window is intended to lie inside these established stability limits. The design itself uses standard FOPTD/SOPTD models and SIMC tuning \citep{seborg2010process,skogestad2003simc,rivera1986internal,astrom2006advanced,garpinger2014performance}, with model-free three-term synthesis \citep{keel2008robust} the usual alternative when no parametric model exists. Sampling-zero migration \citep{astrom1984zeros,yuz2005sampled}, computation and communication delay \citep{wittenmark1995timing,nilsson1998stochastic,cervin2003timing,seto1996task}, coefficient quantisation \citep{middleton1986delta}, and probabilistic control under identification uncertainty \citep{campi2008exact,calafiore2011probabilistic,tempo2013randomized,ljung1999system} are established subjects; here they are combined only as far as periodic sampling-period selection requires. Event-triggered and self-triggered control \citep{astrom2002comparison,tabuada2007event,heemels2012introduction} is outside this setting.
+
+The closest sampling-selection studies use numerical performance indices \citep{susca2023sampling,araujo2024samplingperiod}. Wang et al. \citep{wang2025impulsive} compute a stability-certified maximum period for second-order digital PID loops and include experimental support. The present contribution is different and deliberately narrower: it gives explicit lower and upper feasibility endpoints, a projected interior candidate, an exact arbitrary-delay FOPTD check, and a clear separation between conditional dead-time uncertainty and joint $(K,\tau,\theta)$ uncertainty for a frozen controller. The joint case is propagated through the selected discrete implementation and assessed on separate bootstrap calibration and validation sets. \Cref{tab:compare} summarises this positioning.
+
+The paper is organised in six sections. \Cref{sec:prelim} defines the problem and digital implementation. \Cref{sec:bounds} derives the sampling-period bounds and feasible-window selection. \Cref{sec:uncertainty} treats dead-time and joint parameter uncertainty. \Cref{sec:numerical-checks} presents the numerical validation, benchmark study, discussion and limitations. \Cref{sec:conclusion} concludes the paper.
+
+\begin{table}[pos=!htb]
+\caption{Representative sampling-period selection approaches. The comparison
+lists the principal output and only those uncertainty or implementation effects
+that enter each selection calculation explicitly.}
+\label{tab:compare}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.24\linewidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.19\linewidth}>{\raggedright\arraybackslash}p{0.22\linewidth}@{}}
+\toprule
+Approach & Main output & Uncertainty & Implementation and validation \\
+\midrule
+Bandwidth and rise-time rules \citep{astrom1997computer,isermann1989digital}
+& Heuristic upper scale for $T$.
+& None.
+& Indirect implementation guidance; textbook examples. \\
+Optimisation-based selection \citep{susca2023sampling}
+& Numerical sampling-period choice for LTI cascade loops.
+& Nominal model.
+& Computational burden enters the objective; numerical cases. \\
+Performance-index analysis \citep{araujo2024samplingperiod}
+& Comparison over candidate periods for digital controllers.
+& Stochastic-controller setting.
+& Sampling-rate penalty; benchmark simulations. \\
+Admissible-period and MSI methods \citep{hetel2017recent,wang2025impulsive}
+& Stability-certified maximum period.
+& Selected parametric or sampling uncertainty models.
+& Primarily an upper-bound calculation; numerical and selected experimental cases. \\
+Present design window
+& Lower and upper endpoints and projected cost choice for SIMC PI/PID loops.
+& Conditional scalar dead-time bound and joint bootstrap propagation for a frozen controller.
+& Delay, coefficient, noise and sampling-zero effects; exact discrete, hybrid and split-bootstrap checks. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =====================================================================
+\section{Problem formulation and digital implementation}
+\label{sec:prelim}
+
+\subsection{Terms used in the design window}
+\label{sec:terms}
+The sampling period is denoted by $T$ and the sampling frequency by
+$f_s=1/T$. The loop crossover frequency $\wc$ is the frequency at which the
+nominal open-loop magnitude equals one. A bandwidth or crossover rule mainly
+places an upper bound on $T$, because a large $T$ adds phase lag and erodes
+robustness.
+
+The design window in this paper is the interval
+$[\Tmin,\Tmax]$. The lower endpoint $\Tmin$ is the largest of the fast-sampling
+limits, such as coefficient quantisation and derivative-noise amplification.
+The upper endpoint $\Tmax$ is the smallest of the slow-sampling limits, such
+as phase-margin loss and load-disturbance degradation. If $\Tmin>\Tmax$, the
+chosen implementation and performance budgets are incompatible. If the window
+is non-empty, the unconstrained surrogate-cost minimiser $\Tcost$ is computed
+and projected onto the interval to give the feasible selection $\Tsel$.
+
+The process models are intentionally standard. FOPTD means
+first-order-plus-time-delay, $K e^{-\theta s}/(\tau s+1)$. SOPTD means
+second-order-plus-time-delay, with natural frequency $\wn$, damping ratio
+$\zeta$ and dead time $\theta$. SIMC denotes simple internal model control
+tuning; here it gives a PI/PID controller with a single closed-loop speed
+parameter $\lambda$. The analysis is for periodic sampling and emulated
+digital control. It is not an event-triggered or scheduling co-design method.
+
+\subsection{Zero-order hold and half-sample delay}
+\label{sec:zoh}
+The zero-order hold has transfer function $H(s)=(1-e^{-sT})/s$. Its frequency
+response factorises exactly.
+\begin{lemma}[Exact hold factorisation]
+\label{lem:zoh}
+For all $\omega$,
+\begin{equation}
+H(j\omega)=\frac{1-e^{-j\omega T}}{j\omega}
+= T\,\frac{\sin(\omega T/2)}{\omega T/2}\,e^{-j\omega T/2},
+\label{eq:zoh}
+\end{equation}
+so the hold magnitude is $T\,|\mathrm{sinc}(\omega T/2)|$. For
+$|\omega T|<2\pi$, and hence throughout the Nyquist interval
+$|\omega T|\le\pi$, the sinc factor is non-negative and the hold phase is
+exactly $-\omega T/2$. Near the origin,
+$|H|/T = 1-(\omega T)^2/24+\mathcal{O}((\omega T)^4)$.
+\end{lemma}
+
+The phase term in \cref{eq:zoh} is exact over the Nyquist baseband; it is not a small-$\omega$ approximation. In phase, the hold therefore behaves as a delay of $T/2$. Its magnitude droop remains below \SI{0.1}{\decibel} for $\omega T\le0.5$. The approximation arises only when this hold result is used for the complete sampled-data loop. The resulting surrogate omits hold-magnitude droop, controller discretisation, aliasing, fractional-delay detail, and intersample behaviour. We use the working model
+\begin{equation}
+L_T(j\omega)\approx L(j\omega)\,e^{-j\omega T/2},
+\label{eq:looptdelay}
+\end{equation}
+in which the sampled loop is treated as the continuous loop with an added
+dead time of $T/2$. \Cref{fig:zoh} illustrates \cref{lem:zoh}. The loop-level
+error of \cref{eq:looptdelay} is checked in \cref{sec:numerical-checks}.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig01_zoh_half_delay.pdf}
+\caption{Zero-order hold as an effective half-sample delay
+(\cref{lem:zoh}). The baseband phase is exactly $-\omega T/2$; the magnitude
+droop stays below \SI{0.1}{\decibel} for $\omega T\le0.5$ and reaches
+\SI{-3.9}{\decibel} only at the Nyquist frequency.}
+\label{fig:zoh}
+\end{figure}
+
+\subsection{Computation, communication and filtering delays}
+\label{sec:delaybudget}
+Equation~\eqref{eq:looptdelay} accounts only for the hold. A real loop also contains computation, communication and filter delays. The computation delay may have a fixed part and a part proportional to the sampling period, so we write
+$T_{\mathrm{comp}}=T_{\mathrm{comp},0}+c_{\mathrm{comp}}T$ with
+$c_{\mathrm{comp}}\in[0,1]$. An emulation controller that applies the command
+within the same period has $c_{\mathrm{comp}}\approx0$. A synchronous-scan
+programmable controller that applies the command at the next scan has
+$c_{\mathrm{comp}}\approx1$. Collecting the constant transport terms
+as $T_{c0}=T_{\mathrm{comp},0}+T_{\mathrm{comm}}+T_{\mathrm{filt},0}$, the
+loop sees an effective dead time
+\begin{equation}
+\thetaeff \;=\; \theta \;+\; \kappa T \;+\; T_{c0},\qquad
+\kappa=\tfrac{1}{2}+c_{\mathrm{comp}}+c_{\mathrm{filt}}.
+\label{eq:thetaeff}
+\end{equation}
+\Cref{fig:arch} shows where each term enters the loop.
+Here $\kappa$ collects delays that scale with $T$, and $\Delta=\kappa T+T_{c0}$ is the added phase-equivalent delay. Ideal same-period actuation gives $\kappa=\tfrac12$. Next-scan actuation gives $\kappa=\tfrac32$ when the filter delay is fixed. The low-frequency group delay of a fixed analogue anti-aliasing filter belongs in $T_{c0}$. If its corner tracks the Nyquist frequency, for example $\omega_f=\pi/(\nu T)$, its low-frequency delay is approximately $\nu T/\pi$ and contributes $c_{\mathrm{filt}}\approx\nu/\pi$. This linear-phase description is the zero-frequency limit of the group delay, and its accuracy depends on filter order. For a first-order filter the phase lag $\arctan(\omega/\omega_f)$ never exceeds the linear term $\omega/\omega_f$, so the model is conservative at every frequency; for a Butterworth filter of order two or more the group delay peaks above its zero-frequency value near the corner (by about 21\% at order two and 50\% at order four), so the linear model can be optimistic when the crossover approaches the corner. When $\wc\gtrsim0.3\,\omega_f$, the exact filter phase at $\wc$ should be used in the phase budget in place of the linear term. The analysis therefore keeps both $\kappa$ and $T_{c0}$ explicit: a hold-only bound is optimistic whenever computation or filter delay is significant.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig02_delay_architecture.pdf}
+\caption{Where each delay and implementation limit enters a periodic digital
+loop. Terms proportional to $T$ accumulate in $\kappa$; fixed transport terms
+accumulate in $T_{c0}$. The upper endpoint is set by loop-shape requirements,
+the lower endpoint by finite precision, derivative noise and actuator
+activity.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Exact FOPTD pulse-transfer model and digital PI realisations}
+\label{sec:digitalimplementation}
+The analytical bounds use the effective-delay surrogate. The frequency-domain checks use an exact sampled FOPTD model. Split the process dead time as
+\begin{equation}
+\theta=mT+\delta,\qquad m=\left\lfloor\frac{\theta}{T}\right\rfloor,
+\qquad 0\leq\delta<T.
+\label{eq:delay-split}
+\end{equation}
+For $\dot x=-x/\tau+(K/\tau)u(t-\theta)$, assume a zero-order-held input and samples $y_k=x(kT)$. The exact state update is
+\begin{equation}
+x_{k+1}=a x_k+b_0u_{k-m}+b_1u_{k-m-1},
+\label{eq:exact-update}
+\end{equation}
+where
+\begin{equation}
+\begin{split}
+a&=e^{-T/\tau},\\
+b_0&=K\!\left(1-e^{-(T-\delta)/\tau}\right),\\
+b_1&=K\!\left(e^{-(T-\delta)/\tau}-e^{-T/\tau}\right).
+\end{split}
+\label{eq:exact-coefficients}
+\end{equation}
+Hence the exact pulse-transfer model at the sampling instants is
+\begin{equation}
+G_T(z)=z^{-(m+1)}\frac{b_0+b_1z^{-1}}{1-az^{-1}}.
+\label{eq:exact-pulse}
+\end{equation}
+Equation~\eqref{eq:exact-pulse} is exact for the FOPTD process under the stated hold and sampling convention; it is not a modified-$z$ approximation.
+
+The PI controller is fixed in continuous time and then emulated. Backward-Euler integration gives
+\begin{equation}
+C_{\rm BE}(z)=K_c\frac{(1+T/\tau_I)-z^{-1}}{1-z^{-1}},
+\label{eq:pi-be}
+\end{equation}
+whereas the bilinear or Tustin rule gives
+\begin{equation}
+C_{\rm TU}(z)=K_c\frac{(1+r)+(-1+r)z^{-1}}{1-z^{-1}},
+\qquad r=\frac{T}{2\tau_I}.
+\label{eq:pi-tu}
+\end{equation}
+A next-scan implementation adds one factor $z^{-1}$. The numerical evaluator finds every downward unit-gain crossing of $G_T(e^{j\Omega})C(e^{j\Omega})$ and reports the minimum phase margin. Continuous frequency is $\omega=\Omega/T$. The tested FOPTD cases have only one crossing, but the algorithm does not assume this. The derivative-noise study uses a backward difference on the measured output. Its filtered variant uses a first-order derivative filter. These definitions keep the hold and controller-discretisation effects separate.
+
+% =====================================================================
+\section{Sampling-period bounds and feasible-window selection}
+\label{sec:bounds}
+
+\subsection{FOPTD loops: bounds and cost-based choice}
+\label{sec:foptd}
+Consider the first-order-plus-time-delay process
+\begin{equation}
+G(s)=\frac{K\,e^{-\theta s}}{\tau s + 1}.
+\label{eq:foptd}
+\end{equation}
+
+\subsubsection{Nominal SIMC loop}
+The SIMC rules \citep{skogestad2003simc} set a PI controller
+$C(s)=K_c\,(1+1/(\tau_I s))$ with
+\begin{equation}
+K_c=\frac{\tau}{K(\lambda+\theta)},\qquad
+\tau_I=\min\{\tau,\;4(\lambda+\theta)\},
+\label{eq:simc}
+\end{equation}
+where $\lambda$ (equivalently $\tau_c$) is the closed-loop time-constant knob.
+When $\tau_I=\tau$ the loop transfer function reduces to a first-order plus
+delay integrator,
+\begin{equation}
+L(s)=\frac{e^{-\theta s}}{(\lambda+\theta)s},\qquad
+\wc=\frac{1}{\lambda+\theta},\qquad
+\mathrm{PM}_0=\frac{\pi}{2}-\frac{\theta}{\lambda+\theta}.
+\label{eq:baseline}
+\end{equation}
+The common robust choice $\lambda=\theta$ gives $\wc=1/2\theta$,
+$\mathrm{PM}_0=\ang{61.4}$ and a gain margin of $\pi$
+(\SI{10}{\decibel}). The running example uses $K=1$,
+$\tau=\SI{10}{\second}$, $\theta=\SI{2}{\second}$ and $\lambda=\theta$. Then
+$\tau_I=\tau$ (since $4(\lambda+\theta)=\SI{16}{\second}>\tau$) and the loop
+follows \cref{eq:baseline}.
+
+\subsubsection{Phase-margin upper bound}
+The first upper bound comes from robustness. Sampling, computation and filter delay add phase lag near crossover, and the effective delay contributes $-\wc\Delta$ radians there. Fixing the allowable phase-margin loss therefore fixes an upper limit on $T$.
+\begin{proposition}[Margin erosion]
+\label{prop:margin}
+For the SIMC loop \cref{eq:baseline}, the delay-equivalent surrogate
+\cref{eq:looptdelay} gives
+\begin{equation}
+\mathrm{PM}(T)=\mathrm{PM}_0-\wc\Delta
+=\mathrm{PM}_0-\frac{\kappa T+T_{c0}}{\lambda+\theta}.
+\label{eq:pm}
+\end{equation}
+Allowing a margin loss of at most $\Delta\varphi_a$ gives the upper bound
+\begin{equation}
+\kappa T+T_{c0}\;\le\;\Delta\varphi_a(\lambda+\theta),
+\label{eq:pmbound}
+\end{equation}
+hence
+\begin{equation}
+\Tmax^{\mathrm{PM}}=\frac{\Delta\varphi_a(\lambda+\theta)-T_{c0}}{\kappa},
+\label{eq:pmmax}
+\end{equation}
+which reduces to $2\Delta\varphi_a(\lambda+\theta)$ in the ideal case
+$\kappa=\tfrac12$, $T_{c0}=0$, and contracts to
+$\tfrac23\Delta\varphi_a(\lambda+\theta)$ for a next-scan controller
+($\kappa=\tfrac32$). The coefficient $1/\kappa$ multiplies the entire
+bracket, a point that recurs in \cref{eq:chance}.
+\end{proposition}
+
+Within the surrogate, the margin reduction in \cref{eq:pm} is exact because a
+pure delay changes phase without changing crossover magnitude. The modelling
+error comes from replacing the complete sampled-data loop by
+\cref{eq:looptdelay}, not from linearising the delay phase.
+
+\Cref{tab:erosion} evaluates \cref{eq:pmbound} for the ideal case. The usual range $\wc T\approx0.15$--$0.5$, or $\omega_s\approx12$--$36\,\wc$, corresponds to a phase budget of about \ang{4}--\ang{15}. A synchronous scan tightens this limit. An analogue prefilter can do the same. A fixed filter contributes its low-frequency group delay to $T_{c0}$. A filter whose corner follows the Nyquist frequency contributes approximately $c_{\mathrm{filt}}T$, where $c_{\mathrm{filt}}\approx\nu/\pi$ for a corner at $\omega_N/\nu$. This contribution is comparable with the hold term and belongs in $\kappa$.
+
+\begin{table}[pos=!htb]
+\caption{Margin-erosion upper bound for the FOPTD loop
+\cref{eq:baseline} with $\lambda=\theta$, ideal case. Here
+$\omega_s/\wc=2\pi/(\wc T)$ is the sampling-to-crossover ratio.}
+\label{tab:erosion}
+\begin{tabular}{cccc}
+\toprule
+$\Delta\varphi_a$ & $\wc T$ & $\omega_s/\wc$ & $T/\theta$ \\
+\midrule
+\ang{5}  & 0.175 & 36 & 0.35 \\
+\ang{10} & 0.349 & 18 & 0.70 \\
+\ang{15} & 0.524 & 12 & 1.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Load-disturbance upper bound}
+Consider a unit step load disturbance added at the plant input, with $e=r-y$. For a loop with integral action, the integrated error is
+\begin{equation}
+IE=\int_0^\infty e(t)\,dt=\frac{\tau_I}{K_c}.
+\label{eq:ie}
+\end{equation}
+The disturbance direction sets the sign, so only the magnitude is used. If $e(t)$ remains one-signed, then $IAE=|IE|$. If it changes sign, $IAE>|IE|$ and the following expressions are lower summaries rather than exact IAE values. When the controller is retuned for the effective delay, replace the identified dead time in the SIMC rule by $\thetaeff$:
+\[
+K_c=\frac{\tau}{K(\lambda+\thetaeff)},\qquad
+\tau_I=\min\{\tau,4(\lambda+\thetaeff)\}.
+\]
+For the common robust choice, also set $\lambda=\thetaeff$. The integrated error then has two closed forms. Select the branch at the no-sampling baseline $\thetaeff=\theta_0$. If a proposed period crosses the branch boundary, evaluate the piecewise expression directly.
+\begin{proposition}[Two-regime IAE degradation]
+\label{prop:iae}
+With the retuned SIMC rule above and $\lambda=\thetaeff$,
+\begin{itemize}
+\item balanced or delay-dominant at the no-sampling baseline
+($\tau\le4(\lambda+\theta_0)$, so
+$\tau_I=\tau$): $IE=2K\thetaeff$, linear in $\thetaeff$;
+\item lag-dominant at the no-sampling baseline
+($\tau>4(\lambda+\theta_0)$, so
+$\tau_I=4(\lambda+\thetaeff)$):
+$IE=16K\thetaeff^2/\tau$, quadratic in $\thetaeff$.
+\end{itemize}
+Let $\theta_0=\theta+T_{c0}$ denote the no-sampling baseline when the fixed
+implementation delay is unavoidable. Budgeting a relative degradation
+$\varepsilon$ against this baseline, that is
+$\thetaeff\le(1+\varepsilon)\theta_0$ in the linear regime and
+$\thetaeff^2\le(1+\varepsilon)\theta_0^2$ in the quadratic regime, gives
+\begin{equation}
+\begin{aligned}
+\Tmax^{IAE}&=\frac{\varepsilon\theta_0}{\kappa}
+&&\text{(linear)},\\
+\Tmax^{IAE}&=\frac{\theta_0\bigl(\sqrt{1+\varepsilon}-1\bigr)}{\kappa}
+&&\text{(quadratic)}.
+\end{aligned}
+\label{eq:iaemax}
+\end{equation}
+These reduce in the ideal case $\kappa=\tfrac12$, $T_{c0}=0$ to
+$2\varepsilon\theta$ and $2\theta(\sqrt{1+\varepsilon}-1)\approx
+\varepsilon\theta$ respectively.
+\end{proposition}
+
+For the balanced running example ($\theta=\SI{2}{\second}$), a
+\SI{25}{\percent} IAE budget permits $T\le\SI{\RunTmaxIAE}{\second}$. For a
+lag-dominant process ($\theta=\SI{1}{\second}$, $\tau=\SI{20}{\second}$), the
+quadratic law tightens this to $T\le\SI{\LagTmaxIAE}{\second}$. In lag-dominant
+loops, this performance bound can be more restrictive than the margin bound.
+
+\subsubsection{Fast-sampling lower bounds}
+\label{sec:foptdlower}
+In exact arithmetic, the emulated loop approaches its continuous counterpart as $T\to0$ \citep{chen1995optimal,astrom1997computer}. The ideal model therefore has no stability-based lower limit on $T$. Finite precision can eventually remove that property and cause instability \citep{fialho1994wordlength,gessing2001fwl}. The bounds below are deliberately more conservative. They represent accuracy and noise budgets that should become active before the finite-word-length stability limit. Each lower endpoint is therefore an implementation constraint, not a fundamental stability limit.
+
+\paragraph{Model-coefficient resolution} The first lower bound comes from
+storing a near-unity discrete pole with finite precision. The discrete lag
+pole is $p=e^{-T/\tau}$, and the lag inferred from it is
+$\hat\tau=-T/\ln p$. The sensitivity of the reconstructed lag to the stored
+pole is
+\begin{equation}
+S=\left|\frac{\partial\ln\hat\tau}{\partial\ln p}\right|
+=\frac{1}{|\ln p|}=\frac{\tau}{T}.
+\label{eq:sens}
+\end{equation}
+This sensitivity diverges as $T\to0$ because the pole approaches $z=1$. A
+$B$-fractional-bit fixed-point coefficient has half-quantisation error
+$|\delta p|\approx 2^{-(B+1)}$. The corresponding relative model-coefficient
+error is $(\tau/T)2^{-(B+1)}$. Requiring this error to stay below
+$\varepsilon_c$ gives
+\begin{equation}
+\Tmin^{\mathrm{pole}}=\frac{\tau\,2^{-(B+1)}}{\varepsilon_c}.
+\label{eq:word}
+\end{equation}
+For $\tau=\SI{10}{\second}$, $B=12$ and $\varepsilon_c=\SI{2}{\percent}$, this
+is \SI{\WordTwelve}{\milli\second}. For $B=16$, it falls to
+\SI{\WordSixteen}{\milli\second}. The mechanism is pole clustering near $z=1$.
+Increasing the number of fractional bits or using the delta operator reduces
+the problem. This is not a general finite-word-length stability bound for a
+digital PI/PID controller. Such a bound would require the chosen controller
+realisation, scaling, accumulator precision, rounding rules and closed-loop
+coefficient sensitivities.
+
+\paragraph{Derivative noise} The second lower bound applies when the
+controller contains derivative action. An unfiltered discrete derivative
+acting on white measurement noise of variance $\sigma_n^2$ produces control
+variance
+\begin{equation}
+\operatorname{Var}(u_D)=2\left(\frac{K_c\tau_D\sigma_n}{T}\right)^2
+\;\propto\;T^{-2}.
+\label{eq:dnoise}
+\end{equation}
+A derivative filter with time constant $\tau_D/N$ caps this growth at small
+$T$. Imposing an actuator-variance budget
+$\operatorname{Var}(u_D)\le V_{u,\max}$ turns \cref{eq:dnoise} into
+\begin{equation}
+\Tmin^{D}=\frac{\sqrt{2}\,K_c\tau_D\sigma_n}{\sqrt{V_{u,\max}}}.
+\label{eq:dbound}
+\end{equation}
+Here $V_{u,\max}$ is a variance budget. If the actuator limit is specified as
+an RMS command contribution, its square should be used in \cref{eq:dbound}.
+For a PI controller this term is absent. For PID it is a lower-bound
+constraint. Together with \cref{eq:word}, it contributes to the lower endpoint
+used in \cref{alg:select}.
+
+\paragraph{Actuator cost} The third lower-bound mechanism is actuator
+activity. The number of control updates over a fixed horizon scales as $1/T$.
+For a control law that cancels a sampling zero near $z=-1$, the total
+variation of the command also scales as $1/T$ (\cref{sec:soptd}). Either way,
+faster sampling can increase actuator activity even when the output response
+looks acceptable. This cost has a physical basis in valve mechanics: static
+friction (stiction) is the most commonly reported valve nonlinearity in the
+process industry \citep{choudhury2005stiction}, each command reversal must
+work against it, and stem friction grows with accumulated travel, which is why
+dedicated friction-compensation schemes exist for pneumatic valves
+\citep{hagglund2002friction}. A command sequence whose reversal count scales
+as $1/T$ therefore maps directly onto stem activity and wear.
+
+\subsubsection{Cost-based choice inside the window}
+\label{sec:foptdopt}
+The bounds define feasibility but do not select a point within the interval. Let $\theta_0=\theta+T_{c0}$ and use the update-penalised surrogate
+\begin{equation}
+J_u(T)=\alpha(\theta_0+\kappa T)^2+\frac{\gamma}{T},
+\qquad T>0.
+\label{eq:foptdcost}
+\end{equation}
+With the dimensionless variable $y=\kappa T/\theta_0$ and
+\begin{equation}
+\rho_u=\frac{\gamma\kappa}{2\alpha\theta_0^3},
+\label{eq:rho-u}
+\end{equation}
+the stationarity condition is
+\begin{equation}
+y^2(1+y)=\rho_u.
+\label{eq:root-u}
+\end{equation}
+The left side is strictly increasing for $y>0$. Also, $J_u''(T)=2\alpha\kappa^2+2\gamma/T^3>0$. A unique positive minimiser $\Tcost$ therefore exists. For $\rho_u\ll1$, $y\sim\sqrt{\rho_u}$; for $\rho_u\gg1$, $y\sim\rho_u^{1/3}$. In the ideal running example, $\kappa=1/2$, $T_{c0}=0$ and $\rho_1=\gamma/(\alpha\theta^3)=0.02$, so $\rho_u=0.005$. Equation~\eqref{eq:root-u} gives $\Tcost=\SI{\RunTcost}{\second}$. This value lies within $[\Tmin^{\mathrm{pole}},\Tmax^{IAE}]=[\SI{\RunTminPole}{\second},\SI{\RunTmaxIAE}{\second}]$.
+
+For a derivative-noise penalty, use
+\begin{equation}
+J_d(T)=\alpha(\theta_0+\kappa T)^2+\frac{\beta}{T^2}.
+\label{eq:soptdcost}
+\end{equation}
+Defining $\rho_d=\beta\kappa^2/(\alpha\theta_0^4)$ yields
+\begin{equation}
+y^3(1+y)=\rho_d,
+\label{eq:root-d}
+\end{equation}
+which also has one positive root. These costs are user-weighted selection criteria; they are not universal performance indices or physical wear laws.
+
+Only the dimensionless weight ratios matter, and they are best set indirectly. Normalising $\alpha$ to one, $\gamma/\alpha$ prices the $1/T$ update rate (processor and network load, actuator movement per unit time) and $\beta/\alpha$ prices the $T^{-2}$ derivative-noise variance; both enter only through $\rho_u$ and $\rho_d$. Rather than choosing them directly, invert the stationarity condition: pick the largest acceptable delay inflation $y=\kappa T/\theta_0$, the fraction that sampling may add to the effective dead time, and read off the implied ratio. Accepting $y=0.1$ gives $\rho_u=y^2(1+y)\approx0.011$; the running-example choice $\rho_u=0.005$ corresponds to $y\approx0.068$, so sampling contributes under $7\%$ of the effective dead time. The projection in \cref{sec:algorithm} further limits weight sensitivity: when the window is narrow an endpoint is returned regardless of the weights, and they matter only when it is wide.
+
+% =====================================================================
+\subsection{SOPTD loops: damping, aliasing and sampling zeros}
+\label{sec:soptd}
+Consider the second-order-plus-time-delay process
+\begin{equation}
+G(s)=\frac{K\wn^2\,e^{-\theta s}}{s^2+2\zeta\wn s+\wn^2}.
+\label{eq:soptd}
+\end{equation}
+The damping ratio changes the character of the sampling problem. Overdamped
+plants reduce to real lag factors and largely follow the FOPTD logic.
+Underdamped plants add an oscillatory mode, and the sampling period must be
+short enough to resolve it.
+
+\subsubsection{Damped-mode frequency and aliasing}
+For $\zeta<1$, the damped natural frequency is
+$\wdamp=\wn\sqrt{1-\zeta^2}$. The $-\SI{3}{\decibel}$ bandwidth follows from
+$u^2-2(1-2\zeta^2)u-1=0$ with $u=(\omega_b/\wn)^2$, giving
+\begin{equation}
+\omega_b=\wn\left[(1-2\zeta^2)+\sqrt{(1-2\zeta^2)^2+1}\right]^{1/2}.
+\label{eq:bw}
+\end{equation}
+This bandwidth equals $\wn$ at $\zeta=1/\sqrt{2}$ and approaches $1.55\,\wn$ as $\zeta\to0$. The zero-order-hold equivalent has poles $z_{1,2}=e^{-\zeta\wn T}e^{\pm j\wdamp T}$. Because the exponential map is periodic, modes at $\wdamp$ and $\wdamp-2\pi k/T$ produce the same sampled poles. At $\wdamp T=2\pi$, the sampled step response is $y(kT)=1-e^{-\zeta\wn kT}$ and appears monotone, even though the continuous response rings between samples. The Nyquist resolution condition is therefore $\wdamp T<\pi$. A stricter fidelity rule, such as eight to ten samples per damped period, gives $\wdamp T\lesssim\pi/4$ and keeps the poles away from the negative real axis. The status of these two conditions differs. The aliasing condition $\wdamp T<\pi$ is the strict boundary enforced by the framework; the $\pi/4$ value is not derived from a robustness metric and remains empirical guidance. It is, however, quantitatively anchored by the SOPTD benchmark in \cref{sec:numerical-checks}: with the mode-resolution constraint enforced at $\wdamp T\le\pi/4$ (attained in \SoptdModeLimited{} of the \SoptdN{} cases, so $\max\wdamp T=\SoptdMaxModePhase$), the largest absolute phase-loss prediction error observed is \ang{\SoptdMaxAbs} and no case falls short of its target. The rule can therefore be read as a validated accuracy region for the phase-budget surrogate rather than a theorem. A user who needs a strict criterion can replace it with an explicit fidelity requirement, such as a bound on inter-sample ripple or on the phase-prediction error, evaluated from the exact zero-order-hold model. \Cref{fig:hidden} illustrates the aliasing.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig05_hidden_oscillations.pdf}
+\caption{Hidden oscillation for an underdamped SOPTD plant
+($\zeta=0.15$, $\wn=1$). Sampling at $\wdamp T=2\pi$ (top) yields a monotone
+sequence that hides a strongly ringing response; ten samples per period
+(bottom) resolves the mode.}
+\label{fig:hidden}
+\end{figure}
+
+\subsubsection{Overdamped plants}
+For $\zeta\ge1$, the plant in \cref{eq:soptd} factorises into two real lags. In a series-form SIMC PID, the PI zero is normally paired with the dominant lag and the derivative zero with the faster lag. The SIMC half rule can also reduce the plant to an FOPTD model \citep{skogestad2003simc}. Either reduction leads back to the FOPTD window in \cref{sec:foptd}, with the effective delay from \cref{eq:thetaeff}. A separate sampling-zero constraint is needed only if the final digital controller cancels a sampled zero.
+
+\subsubsection{Underdamped plants: sampling zeros and derivative noise}
+For $\zeta<1$, the poles are complex. Direct cancellation is not generally
+available. An ideal-form PID can place complex zeros only if
+$\tau_I<4\tau_D$. Even then, cancelling a lightly damped mode is usually a poor
+choice, because the mode remains excited through the load path. The design
+constraints are therefore the mode-fidelity condition
+$\wdamp T\lesssim\pi/4$, the margin bound at the chosen crossover, the
+derivative-noise bound \cref{eq:dbound}, and the sampling-zero constraint
+below.
+
+For the delay-free second-order factor in \cref{eq:soptd}, and for the full
+plant when $\theta/T$ is an integer, the zero-order-hold discretisation (with
+$a=\zeta\wn$, $\varphi=\wdamp T$, $E=e^{-aT}$) has numerator
+$K(b_1 z+b_0)$ with
+\begin{align}
+b_1&=1-E\!\left(\cos\varphi+\tfrac{a}{\wdamp}\sin\varphi\right),\\
+b_0&=E^2-E\!\left(\cos\varphi-\tfrac{a}{\wdamp}\sin\varphi\right).
+\end{align}
+\begin{proposition}[Sampling-zero migration]
+\label{prop:zero}
+The sampling zero $z_0=-b_0/b_1$ of the delay-free relative-degree-two factor
+satisfies
+\begin{equation}
+z_0=-1+\tfrac{2}{3}\zeta\wn T+\mathcal{O}(T^2),
+\label{eq:z0}
+\end{equation}
+so $z_0\to-1$ as $T\to0$, on the unit circle.
+\end{proposition}
+\begin{proof}
+Taylor expansion of the numerator coefficients gives
+$b_1=\frac12\wn^2T^2-\frac13\zeta\wn^3T^3+\mathcal{O}(T^4)$ and
+$b_0=\frac12\wn^2T^2-\frac23\zeta\wn^3T^3+\mathcal{O}(T^4)$.
+Factoring out the common leading term $\frac12\wn^2T^2$,
+\begin{equation*}
+\frac{b_0}{b_1}
+=\frac{1-\frac{4}{3}\zeta\wn T+\mathcal{O}(T^2)}{1-\frac{2}{3}\zeta\wn T+\mathcal{O}(T^2)}
+=\Bigl(1-\tfrac{4}{3}\zeta\wn T\Bigr)\Bigl(1+\tfrac{2}{3}\zeta\wn T\Bigr)+\mathcal{O}(T^2)
+=1-\tfrac{2}{3}\zeta\wn T+\mathcal{O}(T^2),
+\end{equation*}
+where the middle equality expands the denominator geometrically. Then
+$z_0=-b_0/b_1$ gives \cref{eq:z0}.
+\end{proof}
+
+For a non-integer process dead time, the pulse-transfer model contains an
+additional fractional-delay contribution. The finite zero above remains the
+sampling zero of the dynamic second-order factor, but it should not be called
+the complete plant zero without specifying the fractional-delay model.
+
+The sampling zero matters only for designs that cancel it, such as deadbeat, minimum-variance or naive pole-placement controllers. Placing a controller pole at $z_0$ makes the command alternate near the Nyquist frequency. Its amplitude decays by $|z_0|$ per sample. From \cref{eq:z0}, the small-$T$ ringing time is $t_{\mathrm{ring}}\sim3\ln(1/\varepsilon)/(2\zeta\wn)$ and is independent of $T$ to first order. Faster sampling therefore raises the command-reversal frequency without shortening the leading-order decay time. The preferred response is not to cancel $z_0$. Alternatively, impose a tolerance such as $|z_0|\le0.9$. The rule $\zeta\wn T\gtrsim0.15$ is only that selected tolerance expressed through the first-order expansion; it is guidance, not a theorem. \Cref{fig:zero} shows the zero locus and the corresponding command activity.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig06_sampling_zero.pdf}
+\caption{Sampling zero and the command activity it causes. (a) Exact zero of
+the relative-degree-two plant against the first-order expansion
+\cref{eq:z0}; the zero converges to $z=-1$ as $T\to0$ for every damping
+ratio. (b) Total command variation and (c) number of command reversals for a
+cancelled sampling-zero mode ($\zeta=0.4$), both scaling as $1/T$ (fitted
+log-slopes $\ActTVSlope$ and $\ActRevSlope$). The horizontal line in (b) is an
+illustrative bounded-variation reference, not a simulated non-cancelling
+controller.}
+\label{fig:zero}
+\end{figure}
+
+\subsubsection{Cost-based choice with derivative noise}
+For PID loops, use the derivative-noise cost $J_d$ in \cref{eq:soptdcost}. The positive root of \cref{eq:root-d} gives $\Tcost$, which is then projected onto the feasible interval. For $\wn=1$, $\zeta=0.4$, $\theta=\SI{0.5}{\second}$ and $\beta/(\alpha\theta^4)=0.01$, the result is $\Tcost=\SI{\SoptdTcost}{\second}$. The delay-free sampling zero is then $\SoptdZeroAtCost$ and should not be cancelled.
+
+% =====================================================================
+\subsection{Feasible-window selection procedure}
+\label{sec:algorithm}
+Collect the applicable lower and upper constraints as
+\begin{equation}
+\Tmin=\max_i T_{\min,i},\qquad
+\Tmax=\min_j T_{\max,j}.
+\label{eq:window}
+\end{equation}
+The following statement is elementary, but writing it down is what turns a
+list of inequalities into a design procedure: it says exactly when a period
+exists, and it names the two constraints that must be renegotiated when none
+does.
+\begin{proposition}[Feasibility and active constraints]
+\label{prop:feasible}
+An admissible period exists if and only if
+\begin{equation}
+\max_i T_{\min,i}\;\leq\;\min_j T_{\max,j}.
+\label{eq:feasibility}
+\end{equation}
+When \cref{eq:feasibility} holds, the window is
+$[\Tmin,\Tmax]$ and the constraints attaining the maximum and the minimum are
+the \emph{active} lower and upper constraints. When it fails, the same two
+constraints are the only ones whose relaxation can open the window: changing
+any inactive constraint leaves $[\Tmin,\Tmax]$ unaltered.
+\end{proposition}
+\begin{proof}
+Immediate: the admissible set is $\bigcap_i[T_{\min,i},\infty)\cap
+\bigcap_j(0,T_{\max,j}]=[\max_iT_{\min,i},\min_jT_{\max,j}]$, which is
+non-empty precisely under \cref{eq:feasibility}. Since $\Tmin$ and $\Tmax$
+are a maximum and a minimum, perturbing a constraint that does not attain
+them cannot change either endpoint.
+\end{proof}
+
+The practical content is the second sentence. An empty window is not a
+failure of the method; it is a statement that the budgets are inconsistent,
+together with a specific pair of items to renegotiate. \Cref{tab:constraints}
+lists the remedy associated with each constraint: more fractional bits or a
+delta-operator realisation lower $\Tmin^{\mathrm{pole}}$; a derivative filter
+or a smaller $\tau_D$ lowers $\Tmin^{D}$; abandoning zero cancellation
+removes the sampling-zero bound entirely; and on the upper side, reducing
+$c_{\mathrm{comp}}$ (immediate rather than next-scan update) or $T_{c0}$,
+relaxing $\Delta\varphi_a$ or $\varepsilon$, or increasing $\lambda$ all
+raise $\Tmax$. \Cref{fig:window} shows both the window and its closure for
+the process loop of \cref{sec:cases}: panel (b) reports that the
+\SI{12}{bit} coefficient word is the reason the fast scan periods are
+inadmissible, and that the window closes altogether below
+\WindowOpensBits{} fractional bits.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig08_window_map.pdf}
+\caption{The two-sided window for the process loop of \cref{sec:cases}.
+(a) Endpoints against dead-time ratio; the kink in the load-disturbance curve
+is the linear/quadratic regime change of \cref{prop:iae}. (b) The same window
+against coefficient word length: the lower endpoint rises as precision falls
+and crosses the upper endpoint, so that \cref{eq:feasibility} fails below
+\WindowOpensBits{} fractional bits (hatched). (c) Which upper constraint is
+active over the $(\theta/\tau,\lambda/\theta)$ plane; the marker is the case
+study.}
+\label{fig:window}
+\end{figure}
+
+\begin{proposition}[Projection of a strictly convex cost]
+\label{prop:projection}
+Let $J$ be strictly convex on $(0,\infty)$ with unique unconstrained minimiser $\Tcost$, and let the feasible interval $[\Tmin,\Tmax]$ be non-empty. The unique constrained minimiser is
+\begin{equation}
+\Tsel=\operatorname{proj}_{[\Tmin,\Tmax]}(\Tcost)
+=\min\{\Tmax,\max\{\Tmin,\Tcost\}\}.
+\label{eq:projection}
+\end{equation}
+\end{proposition}
+\begin{proof}
+Strict convexity makes $J'$ strictly increasing, with one sign change at $\Tcost$. If $\Tcost$ lies inside the interval, it is feasible and optimal. If it lies below the interval, $J$ increases over the feasible set and the minimum is $\Tmin$. If it lies above the interval, $J$ decreases over the feasible set and the minimum is $\Tmax$.
+\end{proof}
+
+\begin{table}[pos=!htb]
+\caption{Constraint summary, with the validity condition attached to each
+bound and the design change that relaxes it. Only the two \emph{active}
+constraints of \cref{prop:feasible} need to be renegotiated when the window
+is empty. Actuator update or wear is a soft cost unless an explicit
+admissible budget is supplied.}
+\label{tab:constraints}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.20\linewidth}>{\centering\arraybackslash}p{0.07\linewidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+Constraint & Dir. & Source and validity & Remedy when binding\\
+\midrule
+Margin erosion & upper & \cref{prop:margin}; delay surrogate at the nominal crossover & relax $\Delta\varphi_a$, raise $\lambda$, reduce $c_{\mathrm{comp}}$ or $T_{c0}$\\
+Load-disturbance IAE & upper & \cref{prop:iae}; SIMC retuned on $\thetaeff$, one-signed error & relax $\varepsilon$, or accept a slower loop\\
+Mode resolution & upper & $\omega_dT<\pi$ strict; $\omega_dT\lesssim\pi/4$ is the validated accuracy region & sample faster, or accept unresolved intersample ripple\\
+Coefficient resolution & lower & \cref{eq:word}; representation bound on a near-unity stored pole & more fractional bits, or a delta-operator realisation\\
+Derivative noise & lower & \cref{eq:dbound}; unfiltered backward difference on white noise & add or tighten the derivative filter, reduce $\tau_D$\\
+Sampling-zero cancellation & lower, optional & exact $|z_0(T)|$ tolerance; $\zeta\wn T\gtrsim0.15$ is heuristic & do not cancel the zero; the bound then disappears\\
+Update or wear penalty & soft & \cref{eq:foptdcost} & reprice $\gamma/\alpha$\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{A unit-free reading of the window}
+\label{sec:chart}
+The upper bounds depend on the plant only through dimensionless groups, so
+the window transfers across physical scales without recomputation. Dividing
+\cref{eq:pmbound,eq:iaemax} by $\lambda+\theta$ and writing
+$x=\theta_0/(\lambda+\theta)$ for the delay fraction gives
+\begin{equation}
+\frac{\kappa T}{\lambda+\theta}\;\leq\;
+\min\Bigl\{\Delta\varphi_a,\;\varepsilon x,\;
+(\sqrt{1+\varepsilon}-1)\,x\Bigr\},
+\label{eq:normalised}
+\end{equation}
+in which the margin bound is a horizontal line and each IAE bound is a ray
+through the origin. \Cref{fig:chart}(a) plots this; a loop is characterised
+by one point $x$, and the admissible normalised period is read directly.
+Because the ordinate is $\kappa T/(\lambda+\theta)$, the same chart serves a
+\SI{180}{\second} thermal loop and a \SI{700}{\hertz} converter loop. The
+lower bounds do not normalise in this way: they carry the physical scales of
+word length, noise and actuator hardware, which is precisely why they must be
+evaluated per application rather than read off a chart.
+
+\Cref{fig:chart}(b) makes the complementary robustness check: with the
+controller frozen at the identified model and $K$, $\tau$, $\theta$ each
+perturbed by up to $\pm\RobSpread\%$, the exact phase margin across the
+window stays within a band whose lower edge is what the designer should read.
+At the selected period of \cref{sec:cases} the nominal margin is
+\ang{\RobNominalPM}, the median over draws is \ang{\RobMedianPM} and the worst
+is \ang{\RobWorstPM}, so \RobSatProb\% of draws retain at least \ang{45}.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig09_design_chart.pdf}
+\caption{(a) Unit-free form \cref{eq:normalised} of the upper bounds; the
+shaded region is admissible for a \ang{10} margin budget and a
+\SI{25}{\percent} IAE budget. (b) Local robustness band for the process loop:
+exact phase margin over \RobDraws{} draws with $K$, $\tau$ and $\theta$
+perturbed by up to $\pm\RobSpread\%$ and the controller held fixed.}
+\label{fig:chart}
+\end{figure}
+
+\begin{algorithm}[!ht]
+\small
+\caption{Constraint-based sampling-period selection}
+\label{alg:select}
+\KwIn{Plant and controller model; delay architecture; performance, precision and noise budgets; uncertainty quantile if used; surrogate-cost weights.}
+\KwOut{$\Tsel$, $[\Tmin,\Tmax]$, $\Tcost$ and active constraints.}
+Compute deterministic positive upper bounds\;
+If only dead time is uncertain under the conditions of \cref{eq:chance}, compute the scalar chance bound; if its numerator is non-positive, report infeasibility\;
+If $(K,\tau,\theta)$ are jointly uncertain, calibrate the implementation-specific bound in \cref{eq:joint-period} with the frozen controller and retain an independent validation set\;
+Record the minimum applicable upper bound as $\Tmax$\;
+Compute all applicable lower bounds and record their maximum $\Tmin$\;
+\If{$\Tmin>\Tmax$}{report infeasibility and the active conflicting constraints; stop\;}
+Solve \cref{eq:root-u} or \cref{eq:root-d} for $\Tcost$\;
+Set $\Tsel$ from \cref{eq:projection}\;
+Validate the selected period with \cref{eq:exact-pulse} and the chosen digital controller\;
+\Return{$\Tsel$, $[\Tmin,\Tmax]$, $\Tcost$, active constraints}\;
+\end{algorithm}
+
+% =====================================================================
+\section{Dead-time uncertainty and chance-constrained feasibility}
+\label{sec:uncertainty}
+Let $(\widehat K,\widehat\tau,\widehat\theta)$ be the identified model used to tune the controller, and let $(K,\tau,\theta)$ be the actual plant. After identification, the controller is frozen. It is not retuned for each uncertainty draw. Two uncertainty models are considered.
+
+\subsection{Conditional dead-time uncertainty}
+First suppose that $K=\widehat K$, $\tau=\widehat\tau$, $\tau_I=\widehat\tau$, and only $\theta$ is uncertain. With $\thetad=\widehat\theta$, the implemented controller has
+\begin{equation}
+K_c=\frac{\widehat\tau}{\widehat K(\lambda+\thetad)},
+\label{eq:fixed-controller}
+\end{equation}
+and the continuous open loop reduces to
+\begin{equation}
+L(s;\theta)=\frac{e^{-\theta s}}{(\lambda+\thetad)s},
+\qquad \omega_c=\frac{1}{\lambda+\thetad}.
+\label{eq:uncertain-loop}
+\end{equation}
+Under the delay-equivalent sampled-data model,
+\begin{equation}
+\mathrm{PM}(T,\theta)=\frac{\pi}{2}
+-\frac{\theta+\kappa T+T_{c0}}{\lambda+\thetad}.
+\label{eq:fixed-pm}
+\end{equation}
+Therefore the sampling-induced erosion
+\begin{equation}
+\mathrm{PM}(0,\theta)-\mathrm{PM}(T,\theta)
+=\frac{\kappa T}{\lambda+\thetad}
+\label{eq:fixed-erosion}
+\end{equation}
+is deterministic. Dead-time uncertainty changes the absolute margin, not the erosion caused by sampling.
+
+Let $q_{1-\alpha}(\theta)$ be the upper $(1-\alpha)$ quantile of the conditional dead-time distribution and define $A=\pi/2-\mathrm{PM}_{\min}$. Monotonicity of \cref{eq:fixed-pm} gives
+\begin{equation}
+\Pr\{\mathrm{PM}(T,\theta)\geq\mathrm{PM}_{\min}\}\geq1-\alpha
+\quad\Longleftrightarrow\quad
+T\leq\Tmaxcc(\alpha),
+\label{eq:chance-event}
+\end{equation}
+where
+\begin{equation}
+\Tmaxcc(\alpha)=
+\frac{A(\lambda+\thetad)-q_{1-\alpha}(\theta)-T_{c0}}{\kappa}.
+\label{eq:chance}
+\end{equation}
+If the numerator is non-positive, the required probability and absolute phase margin cannot be met even as $T\rightarrow0$. Equation~\eqref{eq:chance} is exact only for the delay surrogate and the stated conditional model. It does not cover joint parameter uncertainty.
+
+\subsection{Joint gain, time-constant and dead-time uncertainty}
+For the actual FOPTD plant and the controller frozen at the identified model, the continuous open loop is
+\begin{equation}
+L(s;K,\tau,\theta)=
+\frac{K}{\widehat K}
+\frac{\widehat\tau s+1}{\tau s+1}
+\frac{e^{-\theta s}}{(\lambda+\widehat\theta)s}.
+\label{eq:joint-loop}
+\end{equation}
+If either $K$ or $\tau$ differs from its identified value, the cancellation in \cref{eq:uncertain-loop} is lost. Crossover frequency and phase margin then depend on all three parameters. An upper quantile of $\theta$ alone can no longer certify the chance constraint.
+
+Let $\{\xi_b=(K_b,\tau_b,\theta_b)\}_{b=1}^{B_c}$ be calibration draws from an identification uncertainty model. For a specified discrete controller and timing architecture, define
+\begin{equation}
+\widehat p_c(T)=\frac{1}{B_c}\sum_{b=1}^{B_c}
+\mathbf{1}\!\left\{\mathrm{PM}_{d}(T;\xi_b,\widehat C)
+\geq\mathrm{PM}_{\min}\right\},
+\label{eq:empirical-chance}
+\end{equation}
+where $\mathrm{PM}_{d}$ is computed from the exact pulse-transfer loop and $\widehat C$ is held fixed. The implementation-specific empirical upper period is
+\begin{equation}
+\Tmax^{\mathrm{joint}}=
+\sup\{T>0:\widehat p_c(T)\geq1-\alpha\}.
+\label{eq:joint-period}
+\end{equation}
+The selected period must be checked on draws that were not used for calibration. The study below therefore splits the residual-bootstrap sample into calibration and validation halves. The Wilson interval describes finite validation-sample uncertainty only. It is not a repeated-experiment coverage guarantee.
+
+\begin{lemma}[Conditional dispersion invariance]
+\label{lem:invariance}
+If only $\theta$ is random and
+$J(T,\theta)=\alpha_c(\theta+\kappa T+T_{c0})^2+g(T)$ with deterministic $g$, then
+\begin{equation}
+\E[J(T,\theta)]=\alpha_c(\bar\theta+\kappa T+T_{c0})^2
++g(T)+\alpha_c\sigma_\theta^2.
+\label{eq:invariance}
+\end{equation}
+Thus the unconstrained minimiser does not depend on $\sigma_\theta^2$. This invariance need not hold for \cref{eq:joint-loop}. In the joint case, crossover frequency, controller mismatch and model-dependent cost weights can all vary between draws.
+\end{lemma}
+
+Use \cref{eq:chance} only when a dead-time-only uncertainty model is justified. Otherwise use \cref{eq:joint-period} with the actual digital controller. In either case, combine the uncertainty bound with the other constraints and apply the projection in \cref{eq:projection}.
+
+% =====================================================================
+\section[Numerical validation, benchmark study, discussion and limitations]{Numerical validation, benchmark study,\\ discussion and limitations}
+\label{sec:numerical-checks}
+The script \texttt{validation\_ejc.py} regenerates every numerical figure, CSV file, JSON summary and LaTeX table used in the paper. Random seeds and package versions are fixed. The phase-margin calculation examines every downward unit-gain crossing and reports the minimum margin. The present FOPTD sweeps contain at most \BenchMaxCrossings{} crossing.
+
+\subsection{Exact FOPTD check of the delay surrogate}
+\Cref{fig:pm} compares the delay surrogate with the exact arbitrary-delay pulse-transfer model for the running example. It includes backward-Euler and Tustin PI controllers under immediate and next-scan timing. Within the usual phase-budget range, the discrepancy is about one degree or less. The broader benchmark is different: there, positive backward-Euler errors can reach several degrees and indicate conservatism.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig03_exact_margin_validation.pdf}
+\caption{Exact pulse-transfer validation for the FOPTD running example. (a) Immediate-update phase margin for the delay surrogate, backward-Euler PI and Tustin PI. (b) Exact-minus-surrogate error for immediate and next-scan implementations.}
+\label{fig:pm}
+\end{figure}
+
+\subsection{Multi-case FOPTD phase-budget benchmark}
+The \ang{10} analytical period was tested for six dead-time ratios, two tuning ratios, two timing architectures and two PI discretisations. This gives \BenchN{} cases, all with $\tau_I=\tau$. \Cref{fig:benchmark,tab:benchmark-aggregate} compare the exact pulse-transfer margin with the analytical target. The worst shortfall was \ang{\BenchWorstShortfall}. Positive errors are conservative. Tustin with an explicit next-scan delay follows the surrogate most closely in this benchmark.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig10_phase_budget_benchmark.pdf}
+\caption{FOPTD phase-budget benchmark. The ordinate is exact phase margin minus the analytical target; negative values denote shortfall and positive values conservatism.}
+\label{fig:benchmark}
+\end{figure}
+
+\input{benchmark_summary_table.tex}
+
+\subsection{Load-disturbance, coefficient-resolution and noise checks}
+For the lag-dominant FOPTD example, the hybrid simulation reproduces the analytical quadratic law in \cref{prop:iae} to machine precision. This exactness is structural rather than remarkable. Once the loop settles, the discrete integrator enforces $\mathrm{IE}=\tau_I/K_c$ for the sampled loop as well, and the simulated error stays one-signed, so $\mathrm{IAE}=|\mathrm{IE}|$. The simulation therefore confirms closed-loop stability and the one-signed-response assumption behind \cref{prop:iae}, and it raises an error if a sign change occurs.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig04_iae_law.pdf}
+\caption{Load-disturbance IAE for a lag-dominant FOPTD loop ($\tau=\SI{20}{\second}$, $\theta=\SI{1}{\second}$). The hybrid simulation follows the analytical quadratic law without a fitted scale factor; panel (b) uses a fixed $\pm0.2\%$ vertical scale.}
+\label{fig:iae}
+\end{figure}
+
+The coefficient-resolution calculation uses the exact rounded near-unity pole and the half-quantisation sensitivity bound in \cref{eq:sens}. It remains a representation bound, not a controller-level fixed-point stability result. The derivative-noise Monte Carlo study uses 40 replications per period; the fitted unfiltered log-slope is \NoiseSlope{}, close to the $-2$ exponent in \cref{eq:dnoise}, and the filtered derivative remains bounded as $T$ decreases. \Cref{fig:lower} collects both lower-bound mechanisms.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig07_lower_bounds.pdf}
+\caption{The two fast-sampling lower bounds. (a) Exact rounded-coefficient error and the half-step sensitivity envelope of \cref{eq:sens}. (b) Resulting lower endpoint against fractional word length. (c) Derivative-command noise: the unfiltered variance follows $T^{-2}$, while a first-order filtered derivative caps the high-frequency gain at $K_cN$.}
+\label{fig:lower}
+\end{figure}
+
+For the sampling-zero expansion, $\zeta=0.4$, $\wn=1$ and $T=\SI{0.35}{\second}$ give the exact delay-free zero $z_0=\ZeroExact$ and the first-order value $\ZeroFirst$, a $\ZeroPct\%$ discrepancy. Panels (b) and (c) of \cref{fig:zero} concern commanded activity, not guaranteed mechanical motion.
+
+\subsection{Broadened SOPTD sampled-data check}
+The reference PID settings $\tau_I=2\zeta/\wn$ and $\tau_D=1/(2\zeta\wn)$ cancel the delay-free second-order denominator. They are used only to make the benchmark transparent and are not recommended for lightly damped plants. The benchmark contains \SoptdDistinct{} dimensionless plant/tuning combinations: three damping ratios, three normalised dead times and three normalised tuning values. Each is tested under immediate and next-scan timing and with $-10\%$, zero and $+10\%$ modal mismatch, giving \SoptdN{} cases. The exact ZOH state-space model includes fractional dead time and a Tustin PID controller.
+
+Two choices make this benchmark measure the sampled-data approximation and nothing else. First, the tested period is the window value $\min\{\Tmax^{\mathrm{PM}},\Tmax^{\mathrm{mode}}\}$ rather than the margin bound alone, so every case stays inside the stated mode-resolution region. Second, the reference is the continuous-time margin of the \emph{same}, possibly mismatched, loop, less the delay-surrogate loss evaluated at that loop's own crossover. Scoring instead against the nominal closed-form margin would charge the modal mismatch, which is a modelling error of several degrees, to the sampling surrogate. With this reference, the median absolute phase-loss error is \ang{\SoptdMedianAbs} and the largest is \ang{\SoptdMaxAbs}. Every one of the \SoptdN{} cases is conservative: the worst shortfall is \ang{\SoptdWorstShortfall}, so within the mode-resolution region the surrogate never overstates the achievable margin.
+
+\input{soptd_validation_table.tex}
+
+\subsection{Split-bootstrap fixed-controller study}
+A synthetic FOPTD step response with $(K,\tau,\theta)=(1,10,2)$ was sampled every \SI{0.5}{\second}. Gaussian output noise with standard deviation 0.03 was added, and the model was fitted by nonlinear least squares. Two thousand \emph{centred} residual-bootstrap fits were generated; centring the residuals keeps the resampling distribution unbiased for the fitted response. Before any period was selected, the fits were split into \BootNCal{} calibration draws and \BootNVal{} validation draws. The fitted dead time was $\widehat\theta=\BootThetaHat\,\mathrm{s}$, and the calibration upper 95\% quantile was $\BootThetaQ\,\mathrm{s}$.
+
+For the dead-time-only model, set $\lambda=\widehat\theta$, $T_{c0}=\SI{0.30}{\second}$, $\kappa=1/2$ and $\mathrm{PM}_{\min}=\ang{50}$. Equation~\eqref{eq:chance} then gives $T=\BootTtheta\,\mathrm{s}$. On the held-out draws, the surrogate achieved \BootCovSurVal\% satisfaction and the exact scalar Tustin loop achieved \BootCovScalarTuVal\%. These figures support only the conditional model. When the complete bootstrap triplets were propagated through the frozen controller at the same period, satisfaction fell to \BootCovJointTuAtScalar\% for Tustin and \BootCovJointBEAtScalar\% for backward Euler. This is the quantitative cost of using a scalar dead-time quantile when the gain and time constant are also uncertain.
+
+Calibration with \cref{eq:joint-period} reduced the period to $\BootTjointTu\,\mathrm{s}$ for Tustin and $\BootTjointBE\,\mathrm{s}$ for backward Euler, raising held-out satisfaction to \BootCovJointTu\% and \BootCovJointBE\% respectively, with 95\% Wilson intervals of \BootJointTuCILo--\BootJointTuCIHi\% and \BootJointBECILo--\BootJointBECIHi\%. Both intervals contain the nominal 95\%, but both point estimates sit just below it, and the reason is structural rather than accidental: the empirical criterion $\widehat p_c(T)\geq1-\alpha$ selects the largest period at which the calibration frequency has not yet dipped, so the same finite sample both chooses and scores the period. Replacing that criterion by its lower Wilson bound prices in the calibration-sample uncertainty and shortens the period further, to $\BootTjointTuCons\,\mathrm{s}$ and $\BootTjointBECons\,\mathrm{s}$, which restores held-out satisfaction to \BootCovJointTuCons\% and \BootCovJointBECons\%. The conservative criterion is the one we would recommend in practice; it costs about \SI{6}{\percent} of sampling period. Using the calibration mean instead of the upper quantile gave $T=\BootTmean\,\mathrm{s}$ and only \BootCovMean\% surrogate satisfaction. Calibration and validation use different draws, so no selected period is tested on the data used to choose it. The result nevertheless remains conditional on this synthetic identification experiment and bootstrap model.
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig11_bootstrap_chance.pdf}
+\caption{Split-bootstrap uncertainty study. (a) Synthetic observations and FOPTD fit. (b) Separate calibration and validation dead-time samples. (c) Lower tail of the held-out phase-margin distributions, where the constraint is decided. (d) Held-out satisfaction probabilities: the scalar quantile design is optimistic under joint uncertainty, empirical joint calibration nearly recovers the target, and Wilson-bound calibration recovers it.}
+\label{fig:chance}
+\end{figure}
+
+\subsection{Comparison with a bandwidth rule}
+For the running loop, a rule using $N$ samples per crossover period gives
+$T_N=2\pi/(N\omega_c)$. With $\omega_c=\SI{0.25}{rad/s}$, $N=10$ gives
+$T_N=\SI{\BandTten}{\second}$ and a hold-only phase loss of about \ang{\BandLossTen},
+outside the selected \ang{10} budget. With $N=20$, the period is
+$\SI{\BandTtwenty}{\second}$ and the loss is about \ang{\BandLossTwenty}, inside that budget.
+
+A bandwidth rule can therefore agree with the proposed window, but only after a phase-loss budget has been chosen. Maximum-sampling-interval methods answer a different question \citep{wang2025impulsive}. They certify stability or exponential convergence for a specified sampled-data PID loop. The present window selects a performance and implementation region inside that boundary. For the running loop with immediate update, the exact characteristic roots give stability limits of $\SI{\RunTstabBE}{\second}$ for backward Euler and $\SI{\RunTstabTU}{\second}$ for Tustin. These are $\RunStabRatioBE$ and $\RunStabRatioTU$ times the \ang{10} margin bound of $\SI{\RunTmaxPM}{\second}$. The selected periods therefore lie well inside the stability region.
+
+\subsection{Synchronous-scan example}
+Next-scan actuation adds one full sample delay. For the running loop, this changes $\kappa$ from $1/2$ to $3/2$. The $1/\kappa$ scaling in \cref{eq:pmmax} therefore reduces the \ang{10} margin bound from $\SI{\RunTmaxPM}{\second}$ to $\SI{\RunTmaxPMNext}{\second}$. The earlier candidate $\Tcost=\SI{\RunTcost}{\second}$ was calculated for $\kappa=1/2$. Here it is checked only for feasibility; it is not re-optimised for next-scan timing. A hold-only calculation would overstate the allowable period by a factor of three.
+
+% =====================================================================
+\FloatBarrier
+\subsection{Engineering case studies}
+\label{sec:cases}
+The two cases below apply \cref{alg:select} end to end to loops from
+different industries. Both are \emph{illustrative design calculations} built
+on published component values and standard timing architectures; neither is a
+hardware validation. Their purpose is to show that the window is genuinely
+two-sided in practice, and that the binding constraint differs by
+application. \Cref{tab:applications} collects the numbers and
+\cref{fig:cases} shows them.
+
+\subsubsection{Process loop on a synchronous-scan controller}
+Consider a jacketed-vessel temperature loop identified as
+$K=1.8$, $\tau=\SI{180}{\second}$, $\theta=\SI{40}{\second}$, controlled by a
+SIMC PI with $\lambda=\theta$ on a programmable controller. The command is
+applied at the next scan, so $c_{\mathrm{comp}}=1$ and $\kappa=3/2$; a fixed
+\SI{2.0}{\second} analogue filter group delay and \SI{0.15}{\second} of
+fieldbus transport give $T_{c0}=\SI{2.15}{\second}$. The budgets are a
+\ang{10} margin loss, a \SI{25}{\percent} load-disturbance degradation, and
+\SI{12}{bit} storage of the discrete pole at \SI{2}{\percent} coefficient
+tolerance.
+
+Because $\tau_I=\tau$ here, \cref{eq:pmmax,eq:iaemax} apply directly and give
+$\Tmax=\ProcTmax\,\mathrm{s}$, set by \ProcActiveUpper; the margin bound is
+looser at $\ProcTmaxPM\,\mathrm{s}$. Equation~\eqref{eq:word} gives
+$\Tmin=\ProcTmin\,\mathrm{s}$. The window is
+$[\ProcTmin,\ProcTmax]\,\mathrm{s}$, and projecting the scan periods
+$\{0.1,0.2,0.5,1,2,5,10\}\,\mathrm{s}$ onto it leaves only
+$\{\ProcGridAdmissible\}\,\mathrm{s}$ admissible. The surrogate cost places
+$\Tcost=\ProcTcost\,\mathrm{s}$ inside the window, so the largest admissible
+scan at or below it, $\ProcTsel\,\mathrm{s}$, is selected. The exact
+pulse-transfer model with a backward-Euler PI then returns
+\ang{\ProcPMexact} against the predicted \ang{\ProcPMtarget}.
+
+The engineering content is the lower endpoint. A bandwidth rule would happily
+endorse a \SI{0.5}{\second} scan, and nothing in the loop shape argues
+against it; it is the \SI{12}{bit} coefficient word that makes it
+inadmissible, because the discrete pole $e^{-T/\tau}$ then sits too close to
+$z=1$ to be stored at \SI{2}{\percent} accuracy. Either the scan is slowed or
+the word length is increased --- and \cref{fig:window}(b) shows that below
+\WindowOpensBits{} fractional bits no scan period works at all.
+
+\subsubsection{Voltage loop of a digitally controlled converter}
+Over the bandwidth of interest, the averaged output-voltage response of an
+LC-filtered converter can be represented by an identified low-order model
+with effective computation, modulation and sensing delay. This is a
+control-design abstraction: it does not describe switching-frequency
+behaviour, and the window derived from it is not a switching-level
+guarantee.
+
+Take $L=\SI{220}{\micro\henry}$ and $C=\SI{220}{\micro\farad}$, so
+$\wn=1/\sqrt{LC}$ corresponds to $\PowFres\,\mathrm{Hz}$, with $\zeta=0.20$
+from equivalent series resistance and load damping and
+$\theta=\SI{20}{\micro\second}$ of ADC and averaging transport. The duty
+cycle is updated at the next modulation boundary, so again $\kappa=3/2$. The
+compensator places its zero pair on the LC poles, in the manner of a
+type-III voltage-loop compensator, with a filtered derivative ($N=10$), and
+$\lambda=\SI{1}{\milli\second}$ puts the crossover well below the LC
+resonance. Coefficients are stored with \SI{16}{bit}; the ADC noise standard
+deviation is \num{5e-3} per unit against a duty-variance budget of
+\num{1e-4}.
+
+Here the ordering of the constraints is different. The upper endpoint is
+\PowTmax\,$\mu$s, set by \PowActiveUpper; mode resolution is looser at
+\PowTmodeRes\,$\mu$s, so the loop-shape requirement binds before the LC
+mode becomes unresolvable. The lower endpoint is \PowTmin\,$\mu$s, set by
+\PowActiveLower --- not by coefficient resolution, which is inactive at
+\PowTcoefRes\,$\mu$s. Projecting switching-tied periods onto the window
+admits \SI{100}{\micro\second} and \SI{50}{\micro\second} but excludes
+\SI{20}{\micro\second} and \SI{10}{\micro\second}: sampling the voltage loop
+at \SI{100}{\kilo\hertz} buys no margin and injects measurement noise into
+the duty cycle through the derivative path. Selecting
+\PowTsel\,$\mu$s ($f_s=\PowFsw\,\mathrm{kHz}$) gives an exact sampled-data
+margin of \ang{\PowPMexact} against the predicted \ang{\PowPMtarget}, with
+$\wdamp T=\PowModePhase$, comfortably inside the mode-resolution region.
+
+\input{application_table.tex}
+
+\begin{figure}[pos=!htb]
+\centering
+\includegraphics[width=\linewidth]{fig12_applications.pdf}
+\caption{The two case studies. (a), (c) Every constraint on one axis, with
+the binding one in bold, the feasible window shaded, and the implementable
+hardware periods marked (solid where admissible). (b), (d) Exact sampled-data
+verification against the design surrogate at the selected period. The
+process loop is bounded below by coefficient resolution and above by load
+disturbance; the converter loop is bounded below by derivative noise and
+above by margin erosion.}
+\label{fig:cases}
+\end{figure}
+
+Both windows are two-sided, and in both the lower endpoint excludes hardware
+settings that a one-sided rule would accept. That is the practical claim of
+this paper, stated in the units an engineer actually configures: a PLC scan
+period and a sampling rate tied to the switching frequency.
+
+% =====================================================================
+\FloatBarrier
+\subsection{Discussion and limitations}
+\label{sec:discussion}
+The results clarify when conventional sampling rules suffice. If the plant is well identified, the controller is PI, the coefficients have adequate precision and the actuator is not wear-limited, the lower bounds are inactive, the upper limit is the only issue, and a classical bandwidth rule is often adequate. A one-sided rule becomes inadequate when these assumptions fail: a narrow fixed-point word raises $\Tmin^{\mathrm{pole}}$, noisy derivative action raises $\Tmin^{D}$, a zero-cancelling design activates the sampling-zero constraint, and dead-time uncertainty lowers the probabilistic upper bound. Both case studies of \cref{sec:cases} fall in this second category, and in both the excluded settings are ones a bandwidth rule would have endorsed.
+
+Three practical points follow. First, the hold may not be the largest sampled-data lag: in a synchronous-scan controller the computation delay can equal it and a prefilter can add more, so a hold-only bound is optimistic. Second, faster sampling can be actively harmful in a zero-cancelling relative-degree-two design, as \cref{prop:zero,fig:zero} show. Third, the upper endpoint is a phase-margin bound, not a stability certificate: in the running example the immediate-update \ang{10} bound is $\SI{\RunTmaxPM}{\second}$, whereas the delay-surrogate zero-margin value $[\frac{\pi}{2}(\lambda+\theta)-\theta]/\kappa=\SI{\RunTzeroMargin}{\second}$ is $\RunMarginRatio$ times larger and close to the backward-Euler stability limit $\SI{\RunTstabBE}{\second}$. General discrete stability certification remains a separate task for maximum-sampling-interval methods \citep{hetel2017recent,wang2025impulsive}.
+
+The distinction between conditional and joint uncertainty is essential. With $K$ and $\tau$ fixed, uncertain dead time changes the baseline margin but not the sampling-induced erosion, and the chance constraint reduces to an upper dead-time quantile. Once gain or time-constant uncertainty enters, the nominal cancellation is lost and the scalar formula is insufficient; the frozen controller must be evaluated against joint draws with its actual timing and discretisation. The split-bootstrap results show this correction changes the selected period materially.
+
+The framework is not tied to SIMC in all its parts. The closed-form margin bound uses the SIMC loop shape, but applies to any tuning once that loop's crossover and nominal margin are known, numerically if no closed form exists \citep{astrom2006advanced,garpinger2014performance}. The quadratic IAE law uses the lag-dominant near-monotone SIMC response and would need re-derivation, or direct simulation, for tunings with markedly different disturbance responses. The conditional chance bound relies on the cancellation $\tau_I=\tau$; without it only the joint fixed-controller evaluation of \cref{sec:uncertainty} applies, and that evaluation is already tuning-agnostic. The fast-sampling lower bounds, being implementation constraints, carry over unchanged.
+
+The limitations are clear. The single-loop reduction depends on SIMC tuning; the SOPTD treatment requires either overdamped factorisation or an underdamped design that does not cancel the mode. Actuator saturation and anti-windup are not modelled \citep{astrom1989windup}, and the IAE result assumes a near-monotone response. The split bootstrap is conditional on one synthetic data set and one resampling model; it does not establish repeated-experiment coverage. The SOPTD mismatch study is a structured benchmark, not a robust-PID theorem. The case studies of \cref{sec:cases} are design calculations on published component values, not measurements. All checks are simulation-based: hardware or hardware-in-the-loop tests on a fixed-point target are still needed, especially for coefficient resolution, derivative noise and actuator variation.
+
+% =====================================================================
+\section{Conclusions}
+\label{sec:conclusion}
+Sampling-period selection for SIMC-tuned FOPTD and SOPTD PI/PID loops can be treated as a two-sided feasibility problem: robustness, load-disturbance and mode-resolution requirements set the upper limits, while coefficient resolution, derivative noise and optional sampling-zero cancellation set the lower limits. A strictly convex surrogate then gives one interior candidate, which is projected onto the feasible interval.
+
+A feasibility condition makes the procedure decidable: a period exists exactly when the largest lower bound does not exceed the smallest upper bound, and when it does not, only the two active constraints can be usefully changed.
+
+For FOPTD plants, an exact arbitrary-delay pulse-transfer model separates hold, scan delay and controller discretisation. Across \BenchN{} benchmark cases, the analytical \ang{10} period had a worst phase-margin shortfall of \ang{\BenchWorstShortfall}. The expanded SOPTD benchmark covered \SoptdN{} timing and modal-mismatch cases; measured against the continuous margin of the same mismatched loop, every case was conservative, with a median error of \ang{\SoptdMedianAbs} inside the mode-resolution region.
+
+The uncertainty result has two levels. With gain and time constant fixed, the absolute-margin chance constraint reduces to an upper dead-time quantile. Under joint $(K,\tau,\theta)$ uncertainty, this reduction fails because the frozen controller no longer cancels the actual lag. In the split-bootstrap example, the scalar analytical period fell to \BootCovJointBEAtScalar\% held-out satisfaction once joint uncertainty was propagated; implementation-specific calibration recovered \BootCovJointBE\%, and calibrating against the lower Wilson bound rather than the empirical frequency recovered \BootCovJointBECons\%.
+
+Finally, the two worked examples show where the method pays. In the process loop the coefficient word length, not the loop shape, excludes the fast scan periods; in the converter loop the derivative-noise budget excludes the fast switching-tied rates. In both, the admissible set is an interval, and the engineer selects from the periods the hardware can actually produce.
+
+The design window is not a stability certificate, and the surrogate cost is not a universal optimum. Deployment still requires application-specific identification data, controller-level finite-word-length analysis, saturation and anti-windup assessment, and hardware or hardware-in-the-loop validation.
+
+% =====================================================================
+\section*{Declaration of competing interest}
+The author declares no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+\section*{Data and code availability}
+The complete Python source, generated CSV and JSON outputs, LaTeX inputs and fixed software environment are supplied in the accompanying reproducibility package. The archival repository identifier will be inserted in the accepted version.
+
+\printcredits
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references_ejc}
+
+\end{document}
