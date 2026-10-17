@@ -15,10 +15,3 @@ __pycache__/
 .venv/
 .pytest_cache/
 paper/*.abs
-# MTEX Workbench
-*.mtexwb/
-*.mtexwb.saving/
-*.mtexwb.old/
-*.egg-info/
-build/
-dist/
